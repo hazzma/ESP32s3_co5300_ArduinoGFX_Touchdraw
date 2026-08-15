@@ -89,20 +89,21 @@ Arduino_Canvas *gfx = new Arduino_Canvas(LCD_W, LCD_H, gfx_dev);
 ### 5.2 Init Sequence in setup()
 
 ```cpp
+Serial.setTxTimeoutMs(0);
 Serial.begin(115200);
-while (!Serial && millis() < 2000); // Required: Native USB CDC on ESP32-S3
+Serial.setTxTimeoutMs(0);
 
-if (!gfx->begin(20000000)) {        // 20MHz — validated stable on jumper wire
-    Serial.println("[ERROR] Display init failed");
+// 80MHz — validated stable on custom PCB hardware
+if (!gfx->begin(80000000)) {
+    if (Serial && Serial.availableForWrite() > 32) Serial.println("[ERROR] Display init failed");
     while (1);
 }
-Serial.println("[OK] Display initialized");
+if (Serial && Serial.availableForWrite() > 32) Serial.println("[OK] Display initialized");
 ```
 
-> **Note on clock speed:** 20MHz is used because the current setup uses jumper wires.
-> On a final PCB with short traces, this can be raised to 40MHz or 80MHz.
+> **Note on clock speed:** 80MHz is validated on the custom PCB. If debugging on breadboard/jumper wires, reduce to 20MHz (`20000000`).
 
-### 5.3 Color Definitions (RGB565)
+### 5.3 Color Definitions & Bitmap Rendering (RGB565)
 
 ```cpp
 #define COLOR_BLACK   0x0000
@@ -116,6 +117,8 @@ Serial.println("[OK] Display initialized");
 
 > **Warning:** `0x07FF` (standard cyan) causes a known rendering stall in Arduino_GFX
 > with CO5300. Always use `0x07FE` instead.
+
+> **Bitmap Image Endianness:** When rendering Big-Endian RGB565 image arrays (such as those exported from SquareLine Studio / WatchForge / LVGL), always use `gfx->draw16bitBeRGBBitmap(x, y, bitmap, w, h)`. Calling `draw16bitRGBBitmap` will cause double byte-swapping and turn Blue into Green!
 
 ### 5.4 Draw + Flush Pattern
 
@@ -137,9 +140,9 @@ gfx->flush();
 
 ---
 
-## 6. Touch Integration
+## 6. Touch Integration (CST9217 Low-Level Direct Driver)
 
-### 6.1 Init
+### 6.1 Init & Command Mode
 
 ```cpp
 #include <Wire.h>
@@ -151,34 +154,56 @@ gfx->flush();
 
 void touchInit() {
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
-    Wire.setClock(100000); // 100kHz — validated, sufficient for all I2C devices on bus
-    pinMode(TOUCH_INT, INPUT);
+    Wire.setTimeOut(30);
+    Wire.setClock(400000); // 400kHz Fast Mode for zero-latency polling
+    pinMode(TOUCH_INT, INPUT_PULLUP);
+
+    // Initialize CST9217 Command Mode (write 0x01 to register 0xD101)
+    Wire.beginTransmission(TOUCH_ADDR);
+    Wire.write(0xD1);
+    Wire.write(0x01);
+    Wire.write(0x01);
+    Wire.endTransmission(true);
+    delay(10);
 }
 ```
 
-### 6.2 Read Touch Coordinates
+### 6.2 Read Touch Coordinates (10-Byte Packet Parsing)
 
 ```cpp
 bool touchRead(uint16_t *x, uint16_t *y) {
+    uint8_t buf[12] = {0};
+
+    // 1. Write 16-bit register 0xD000 to CST9217
     Wire.beginTransmission(TOUCH_ADDR);
+    Wire.write(0xD0);
     Wire.write(0x00);
-    Wire.endTransmission(false);
-    Wire.requestFrom(TOUCH_ADDR, (uint8_t)6);
-    if (Wire.available() < 6) return false;
+    int err = Wire.endTransmission(true);
+    delayMicroseconds(1000); // 1ms delay for IC packet preparation
 
-    uint8_t buf[6];
-    for (int i = 0; i < 6; i++) buf[i] = Wire.read();
+    if (err != 0) return false;
 
-    // Parsing per CST9217 register map — verify against datasheet if coordinates are wrong
-    *x = ((buf[1] & 0x0F) << 8) | buf[2];
-    *y = ((buf[3] & 0x0F) << 8) | buf[4];
-    return (buf[1] >> 6) != 1; // return false if touch lifted
+    // 2. Read 10 bytes from CST9217
+    int read_len = Wire.requestFrom((uint8_t)TOUCH_ADDR, (uint8_t)10);
+    if (read_len < 7) return false;
+    for (int i = 0; i < read_len && Wire.available(); i++) {
+        buf[i] = Wire.read();
+    }
+
+    // 3. Validate ACK byte & Touch Status
+    bool ack_ok = (buf[6] == 0xAB);
+    uint8_t status = buf[0] & 0x0F; // 0x06 = active touch, 0x01 = contact
+
+    if (ack_ok && (status == 0x06 || status == 0x01)) {
+        *x = ((uint16_t)buf[1] << 4) | (buf[3] >> 4);
+        *y = ((uint16_t)buf[2] << 4) | (buf[3] & 0x0F);
+        if (*x <= 410 && *y <= 502 && (*x > 0 || *y > 0)) {
+            return true;
+        }
+    }
+    return false;
 }
 ```
-
-> **Agent note:** The register map above is based on common CST-series convention.
-> If touch coordinates are inverted or offset, check the CST9217 datasheet for
-> the exact register layout and correct the parsing accordingly.
 
 ---
 
@@ -254,10 +279,12 @@ Core 1:
 
 | Issue | Root Cause | Workaround |
 | :--- | :--- | :--- |
-| Blank screen / freeze at init | Signal integrity at >20MHz on jumper wires | Use `gfx->begin(20000000)` |
-| Cyan renders as yellow / stall | `0x07FF` internal conflict in Arduino_GFX | Use `0x07FE` instead |
-| Serial Monitor empty | Native USB CDC not enabled | Add `-DARDUINO_USB_CDC_ON_BOOT=1` and `while (!Serial && millis() < 2000)` |
-| Canvas alloc fails / crash at begin() | PSRAM not configured in board settings | Set PSRAM to OPI PSRAM in Arduino IDE board settings |
+| MCU freeze / hang when Serial monitor closed | Native USB CDC buffer fills up causing blocking `Serial.print` calls | Set `Serial.setTxTimeoutMs(0)` and check `if (Serial && Serial.availableForWrite() > 32)` |
+| Full-screen image colors corrupted (Blue turns Green) | Big-Endian image arrays double-swapped by `draw16bitRGBBitmap` | Use `gfx->draw16bitBeRGBBitmap(x, y, bitmap, w, h)` for single-burst DMA transfer |
+| Brush strokes have gaps/disconnected dots | Fast finger movements skipping intermediate points | Implement DDA (Digital Differential Analyzer) line interpolation |
+| Blank screen / freeze at init | Signal integrity at >20MHz on jumper wires | Use `gfx->begin(20000000)` on jumper wires, `80000000` on custom PCB |
+| Cyan renders as yellow / stall | `0x07FF` internal conflict in Arduino_GFX | Always replace `0x07FF` with `0x07FE` (`COLOR_CYAN_FIX`) |
+| Touch lift / multi-touch detection failure | CST9217 register parsing mismatch | Read 10 bytes via `0xD000`, validate `buf[6] == 0xAB`, parse X/Y from nibbles |
 
 ---
 
