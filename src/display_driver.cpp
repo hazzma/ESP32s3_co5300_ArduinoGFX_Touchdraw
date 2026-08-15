@@ -144,13 +144,21 @@ void display_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t 
     }
 }
 
-void display_draw_fps(float fps) {
+void display_draw_fps(float true_render_fps, float loop_fps) {
     if (!gfx) return;
-    // Draw background overlay box shifted away from rounded corners
-    gfx->fillRect(40, 20, 120, 26, 0x0000);
-    gfx->drawRect(40, 20, 120, 26, COLOR_CYAN_FIX);
+    // Top Box: True Render FPS (Green Border & Text)
+    gfx->fillRect(40, 16, 132, 24, 0x0000);
+    gfx->drawRect(40, 16, 132, 24, COLOR_CYAN_FIX);
     gfx->setTextColor(0x07E0); // Bright Green
     gfx->setTextSize(2);
-    gfx->setCursor(47, 25);
-    gfx->printf("%.1f FPS", fps);
+    gfx->setCursor(44, 20);
+    gfx->printf("R:%.0f FPS", true_render_fps);
+
+    // Bottom Box: CPU Loop Iteration Frequency (Yellow Border & Text)
+    gfx->fillRect(40, 44, 132, 24, 0x0000);
+    gfx->drawRect(40, 44, 132, 24, 0xFFE0); // Yellow
+    gfx->setTextColor(0xFFE0); // Bright Yellow
+    gfx->setTextSize(2);
+    gfx->setCursor(44, 48);
+    gfx->printf("L:%.0f Hz", loop_fps);
 }
