@@ -94,12 +94,12 @@ void display_draw_bitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int1
         gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
     } else {
         // Flash buffer (read-only const array): Copy line-by-line into an SRAM buffer
-        // to sanitize 0x07FF -> 0x07FE (Cyan fix) and prevent CO5300 display IC hardware hang!
+        // to sanitize 0x07FF -> 0x07FE (Cyan fix) and byte-swap SquareLine/LVGL Big-Endian to RGB565
         static uint16_t line_buf[LCD_W];
         for (int16_t row = 0; row < h; row++) {
             const uint16_t *src_row = bitmap + ((int32_t)row * w);
             for (int16_t col = 0; col < w; col++) {
-                uint16_t pixel = src_row[col];
+                uint16_t pixel = __builtin_bswap16(src_row[col]);
                 if (pixel == 0x07FF) {
                     pixel = COLOR_CYAN_FIX;
                 }
