@@ -146,11 +146,11 @@ void display_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t 
 
 void display_draw_fps(float fps) {
     if (!gfx) return;
-    // Draw background overlay box at top-left
-    gfx->fillRect(5, 5, 120, 26, 0x0000);
-    gfx->drawRect(5, 5, 120, 26, COLOR_CYAN_FIX);
+    // Draw background overlay box shifted away from rounded corners
+    gfx->fillRect(40, 20, 120, 26, 0x0000);
+    gfx->drawRect(40, 20, 120, 26, COLOR_CYAN_FIX);
     gfx->setTextColor(0x07E0); // Bright Green
     gfx->setTextSize(2);
-    gfx->setCursor(12, 10);
+    gfx->setCursor(47, 25);
     gfx->printf("%.1f FPS", fps);
 }

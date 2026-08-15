@@ -127,7 +127,7 @@ static size_t current_size_idx = 1; // 6px default
 
 static void reset_paint_canvas() {
     display_fill_screen(0x0000); // Black background
-    display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+    display_draw_circle(185, 33, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
     display_draw_fps(0.0f);
     if (Serial && Serial.availableForWrite() > 32) {
         Serial.println("[CANVAS] Screen cleared. Ready for finger drawing!");
@@ -221,14 +221,14 @@ void loop() {
     if (b16 == LOW && last_b16 == HIGH) {
         current_color_idx = (current_color_idx + 1) % num_pen_colors;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 16 PRESSED -> CHANGED COLOR TO INDEX %u <<<\n", current_color_idx);
-        display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        display_draw_circle(185, 33, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
     }
 
     // Button 5 -> Change Size
     if (b5 == LOW && last_b5 == HIGH) {
         current_size_idx = (current_size_idx + 1) % num_brush_sizes;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 5 PRESSED -> CHANGED BRUSH SIZE TO %upx <<<\n", brush_sizes[current_size_idx]);
-        display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        display_draw_circle(185, 33, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
     }
 
     last_b7 = b7;
