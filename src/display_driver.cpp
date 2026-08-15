@@ -77,37 +77,10 @@ static inline bool is_ram_ptr(const void *ptr) {
 // display_draw_bitmap: Push a tile (partial area) directly to the AMOLED panel.
 // Called from LVGL flush_cb for each rendered dirty region or directly for images.
 // Safely checks if buffer is in RAM before doing in-place Cyan fix / Cache flush
-// to avoid StoreProhibited CPU crashes on Flash (const) arrays.
-// ---------------------------------------------------------------------------
 void display_draw_bitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h) {
     if (!gfx || !bitmap) return;
-
-    if (is_ram_ptr(bitmap)) {
-        int32_t len = (int32_t)w * h;
-        for (int32_t i = 0; i < len; i++) {
-            if (bitmap[i] == 0x07FF) {
-                bitmap[i] = COLOR_CYAN_FIX;
-            }
-        }
-        uint32_t byte_len = (uint32_t)len * sizeof(uint16_t);
-        Cache_WriteBack_Addr((uint32_t)bitmap, byte_len);
-        gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
-    } else {
-        // Flash buffer (read-only const array): Copy line-by-line into an SRAM buffer
-        // to sanitize 0x07FF -> 0x07FE (Cyan fix) and byte-swap SquareLine/LVGL Big-Endian to RGB565
-        static uint16_t line_buf[LCD_W];
-        for (int16_t row = 0; row < h; row++) {
-            const uint16_t *src_row = bitmap + ((int32_t)row * w);
-            for (int16_t col = 0; col < w; col++) {
-                uint16_t pixel = __builtin_bswap16(src_row[col]);
-                if (pixel == 0x07FF) {
-                    pixel = COLOR_CYAN_FIX;
-                }
-                line_buf[col] = pixel;
-            }
-            gfx->draw16bitRGBBitmap(x, y + row, line_buf, w, 1);
-        }
-    }
+    // draw16bitBeRGBBitmap transmits big-endian image arrays directly via high-speed QSPI DMA
+    gfx->draw16bitBeRGBBitmap(x, y, bitmap, w, h);
 }
 
 void display_draw_circle(int16_t x, int16_t y, uint8_t radius, uint16_t color) {
