@@ -179,6 +179,11 @@ void setup() {
     Serial.println("==============================================\n");
 }
 
+extern "C" const uint8_t ui_koloro_1716820713807_map[];
+
+enum AppMode { MODE_DRAW = 0, MODE_IMAGE = 1 };
+static AppMode current_mode = MODE_DRAW;
+
 void loop() {
     static int last_b7 = HIGH;
     static int last_b16 = HIGH;
@@ -187,26 +192,31 @@ void loop() {
     static bool was_drawing = false;
     static uint16_t prev_touch_x = 0, prev_touch_y = 0;
 
-    // 1. Read Touch Screen Input
-    uint16_t tx = 0, ty = 0;
-    bool touched = touch_read(&tx, &ty);
-
     bool render_occurred = false;
 
-    if (touched) {
-        if (was_drawing) {
-            // Draw continuous line from previous point to current finger position
-            display_draw_line(prev_touch_x, prev_touch_y, tx, ty, pen_colors[current_color_idx], brush_sizes[current_size_idx]);
+    // 1. Mode Execution
+    if (current_mode == MODE_DRAW) {
+        // Read Touch Screen Input for Drawing
+        uint16_t tx = 0, ty = 0;
+        bool touched = touch_read(&tx, &ty);
+
+        if (touched) {
+            if (was_drawing) {
+                display_draw_line(prev_touch_x, prev_touch_y, tx, ty, pen_colors[current_color_idx], brush_sizes[current_size_idx]);
+            } else {
+                display_draw_circle(tx, ty, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+            }
+            prev_touch_x = tx;
+            prev_touch_y = ty;
+            was_drawing = true;
+            render_occurred = true;
         } else {
-            // Draw initial touch point
-            display_draw_circle(tx, ty, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+            was_drawing = false;
         }
-        prev_touch_x = tx;
-        prev_touch_y = ty;
-        was_drawing = true;
-        render_occurred = true;
     } else {
-        was_drawing = false;
+        // MODE_IMAGE: Continuously render full-screen 410x502 RGB565 bitmap image
+        display_draw_bitmap(0, 0, (uint16_t*)ui_koloro_1716820713807_map, 410, 502);
+        render_occurred = true;
     }
 
     // 2. Read Button Inputs
@@ -214,10 +224,14 @@ void loop() {
     int b16 = digitalRead(BTN_16);
     int b5  = digitalRead(BTN_5);
 
-    // Button 7 -> Clear Screen
+    // Button 7 -> Clear Screen (in DRAW mode) / Reset
     if (b7 == LOW && last_b7 == HIGH) {
         if (Serial && Serial.availableForWrite() > 32) Serial.println(">>> BTN 7 PRESSED -> CLEARING CANVAS <<<");
-        reset_paint_canvas();
+        if (current_mode == MODE_DRAW) {
+            reset_paint_canvas();
+        } else {
+            display_draw_bitmap(0, 0, (uint16_t*)ui_koloro_1716820713807_map, 410, 502);
+        }
         render_occurred = true;
     }
 
@@ -225,15 +239,21 @@ void loop() {
     if (b16 == LOW && last_b16 == HIGH) {
         current_color_idx = (current_color_idx + 1) % num_pen_colors;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 16 PRESSED -> CHANGED COLOR TO INDEX %u <<<\n", current_color_idx);
-        display_draw_circle(190, 34, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        if (current_mode == MODE_DRAW) {
+            display_draw_circle(190, 34, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        }
         render_occurred = true;
     }
 
-    // Button 5 -> Change Size
+    // Button 5 -> Toggle Mode (Mode 0: Touch Draw Canvas | Mode 1: Full Image Benchmark)
     if (b5 == LOW && last_b5 == HIGH) {
-        current_size_idx = (current_size_idx + 1) % num_brush_sizes;
-        if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 5 PRESSED -> CHANGED BRUSH SIZE TO %upx <<<\n", brush_sizes[current_size_idx]);
-        display_draw_circle(190, 34, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        current_mode = (current_mode == MODE_DRAW) ? MODE_IMAGE : MODE_DRAW;
+        if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 5 PRESSED -> SWITCHED MODE TO %s <<<\n", current_mode == MODE_DRAW ? "TOUCH DRAW" : "FULL IMAGE BENCHMARK");
+        if (current_mode == MODE_DRAW) {
+            reset_paint_canvas();
+        } else {
+            display_draw_bitmap(0, 0, (uint16_t*)ui_koloro_1716820713807_map, 410, 502);
+        }
         render_occurred = true;
     }
 
