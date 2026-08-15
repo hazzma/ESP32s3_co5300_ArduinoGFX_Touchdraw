@@ -18,5 +18,6 @@ void display_show_test_card(uint16_t bg_color, uint16_t text_color, const char *
 void display_draw_bitmap(int16_t x, int16_t y, uint16_t *bitmap, int16_t w, int16_t h);
 void display_draw_circle(int16_t x, int16_t y, uint8_t radius, uint16_t color);
 void display_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color, uint8_t thickness);
+void display_draw_fps(float fps);
 
 #endif // DISPLAY_DRIVER_H

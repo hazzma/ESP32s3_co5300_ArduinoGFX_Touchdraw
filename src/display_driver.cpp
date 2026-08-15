@@ -33,7 +33,7 @@ void display_init() {
                               22 /* col_offset1 */, 0 /* row_offset1 */,
                               22 /* col_offset2 */, 0 /* row_offset2 */);
 
-    if (!gfx->begin(20000000)) { // 20MHz — stable on jumper wires
+    if (!gfx->begin(80000000)) { // 80MHz — Maximum speed for custom PCB
         Serial.println("[ERROR] Display init failed");
         while (1);
     }
@@ -142,4 +142,15 @@ void display_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t 
         x += xInc;
         y += yInc;
     }
+}
+
+void display_draw_fps(float fps) {
+    if (!gfx) return;
+    // Draw background overlay box at top-left
+    gfx->fillRect(5, 5, 120, 26, 0x0000);
+    gfx->drawRect(5, 5, 120, 26, COLOR_CYAN_FIX);
+    gfx->setTextColor(0x07E0); // Bright Green
+    gfx->setTextSize(2);
+    gfx->setCursor(12, 10);
+    gfx->printf("%.1f FPS", fps);
 }

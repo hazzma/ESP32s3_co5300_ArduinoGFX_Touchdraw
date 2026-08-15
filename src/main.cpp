@@ -127,7 +127,8 @@ static size_t current_size_idx = 1; // 6px default
 
 static void reset_paint_canvas() {
     display_fill_screen(0x0000); // Black background
-    display_draw_circle(20, 25, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+    display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+    display_draw_fps(0.0f);
     if (Serial && Serial.availableForWrite() > 32) {
         Serial.println("[CANVAS] Screen cleared. Ready for finger drawing!");
     }
@@ -220,19 +221,31 @@ void loop() {
     if (b16 == LOW && last_b16 == HIGH) {
         current_color_idx = (current_color_idx + 1) % num_pen_colors;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 16 PRESSED -> CHANGED COLOR TO INDEX %u <<<\n", current_color_idx);
-        display_draw_circle(20, 25, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
     }
 
     // Button 5 -> Change Size
     if (b5 == LOW && last_b5 == HIGH) {
         current_size_idx = (current_size_idx + 1) % num_brush_sizes;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 5 PRESSED -> CHANGED BRUSH SIZE TO %upx <<<\n", brush_sizes[current_size_idx]);
-        display_draw_circle(20, 25, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        display_draw_circle(150, 18, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
     }
 
     last_b7 = b7;
     last_b16 = b16;
     last_b5 = b5;
+
+    // 3. Calculate and Render FPS Benchmark (Updated every 500ms)
+    static uint32_t last_fps_time = millis();
+    static uint32_t frame_count = 0;
+    frame_count++;
+    uint32_t now = millis();
+    if (now - last_fps_time >= 500) {
+        float fps = (float)frame_count * 1000.0f / (float)(now - last_fps_time);
+        display_draw_fps(fps);
+        frame_count = 0;
+        last_fps_time = now;
+    }
 
     delay(2);
 }
