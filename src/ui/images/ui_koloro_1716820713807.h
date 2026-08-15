@@ -1,0 +1,8 @@
+#ifndef UI_KOLORO_1716820713807_H
+#define UI_KOLORO_1716820713807_H
+
+#include "lvgl.h"
+
+LV_IMG_DECLARE(ui_koloro_1716820713807);
+
+#endif // UI_KOLORO_1716820713807_H
