@@ -191,6 +191,8 @@ void loop() {
     uint16_t tx = 0, ty = 0;
     bool touched = touch_read(&tx, &ty);
 
+    bool render_occurred = false;
+
     if (touched) {
         if (was_drawing) {
             // Draw continuous line from previous point to current finger position
@@ -202,6 +204,7 @@ void loop() {
         prev_touch_x = tx;
         prev_touch_y = ty;
         was_drawing = true;
+        render_occurred = true;
     } else {
         was_drawing = false;
     }
@@ -215,6 +218,7 @@ void loop() {
     if (b7 == LOW && last_b7 == HIGH) {
         if (Serial && Serial.availableForWrite() > 32) Serial.println(">>> BTN 7 PRESSED -> CLEARING CANVAS <<<");
         reset_paint_canvas();
+        render_occurred = true;
     }
 
     // Button 16 -> Change Color
@@ -222,6 +226,7 @@ void loop() {
         current_color_idx = (current_color_idx + 1) % num_pen_colors;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 16 PRESSED -> CHANGED COLOR TO INDEX %u <<<\n", current_color_idx);
         display_draw_circle(185, 33, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        render_occurred = true;
     }
 
     // Button 5 -> Change Size
@@ -229,21 +234,26 @@ void loop() {
         current_size_idx = (current_size_idx + 1) % num_brush_sizes;
         if (Serial && Serial.availableForWrite() > 32) Serial.printf(">>> BTN 5 PRESSED -> CHANGED BRUSH SIZE TO %upx <<<\n", brush_sizes[current_size_idx]);
         display_draw_circle(185, 33, brush_sizes[current_size_idx], pen_colors[current_color_idx]);
+        render_occurred = true;
     }
 
     last_b7 = b7;
     last_b16 = b16;
     last_b5 = b5;
 
-    // 3. Calculate and Render FPS Benchmark (Updated every 500ms)
+    // 3. Calculate and Render True Screen Render FPS (Updated every 500ms)
     static uint32_t last_fps_time = millis();
-    static uint32_t frame_count = 0;
-    frame_count++;
+    static uint32_t render_frame_count = 0;
+    
+    if (render_occurred) {
+        render_frame_count++;
+    }
+
     uint32_t now = millis();
     if (now - last_fps_time >= 500) {
-        float fps = (float)frame_count * 1000.0f / (float)(now - last_fps_time);
+        float fps = (float)render_frame_count * 1000.0f / (float)(now - last_fps_time);
         display_draw_fps(fps);
-        frame_count = 0;
+        render_frame_count = 0;
         last_fps_time = now;
     }
 
